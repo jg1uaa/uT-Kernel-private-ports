@@ -1,0 +1,88 @@
+/*
+ *----------------------------------------------------------------------
+ *    micro T-Kernel
+ *
+ *    Copyright (C) 2006-2011 by Ken Sakamura. All rights reserved.
+ *    micro T-Kernel is distributed under the T-License 2.0.
+ *----------------------------------------------------------------------
+ *
+ *    Version:   1.01.01
+ *    Released by T-Engine Forum(http://www.t-engine.org) at 2011/12/12.
+ *
+ *----------------------------------------------------------------------
+ */
+
+/*
+ *      kernel-rom.lnk (sysmain, H8S2212)
+ *	linker script (ROM)
+ */
+
+OUTPUT_FORMAT("elf32-h8300", "elf32-h8300",
+	      "elf32-h8300")
+OUTPUT_ARCH(h8300s)
+
+SECTIONS {
+/*
+	.vector 0x00000000 : {
+		*(.vector)
+	}
+*/
+	.text 0x00000000 : {
+		KEEP (*(.init))
+		*(.text)
+		*(.text.*)
+		*(.stub)
+		KEEP (*(.fini))
+		PROVIDE (__etext = .);
+		PROVIDE (_etext = .);
+		PROVIDE (etext = .);
+		*(.rodata)
+		*(.rodata.*)
+		*(.rodata1)
+		. = ALIGN(0x10);
+	}  =0
+	__data_org = . ;
+	.data 0xffC000 : AT(__data_org) {
+		__data_start = . ;
+		*(.data)
+		*(.data.*)
+		SORT(CONSTRUCTORS)
+		*(.data1)
+		KEEP (*(.eh_frame))
+		*(.gcc_except_table)
+		KEEP (*crtbegin.o(.ctors))
+		KEEP (*(EXCLUDE_FILE (*crtend.o ) .ctors))
+		KEEP (*(SORT(.ctors.*)))
+		KEEP (*(.ctors))
+		KEEP (*crtbegin.o(.dtors))
+		KEEP (*(EXCLUDE_FILE (*crtend.o ) .dtors))
+		KEEP (*(SORT(.dtors.*)))
+		KEEP (*(.dtors))
+		*(.sdata) 
+		*(.sdata.*)
+		. = ALIGN(4);
+		__data_end = .;
+		_edata = .;
+		PROVIDE (edata = .);
+	} 
+	.bss ALIGN(4) : {
+		__bss_start = .;
+		PROVIDE (__noinit_start = .);
+		*(.noinit)
+		PROVIDE (__noinit_end = .);
+		PROVIDE (__sbss_start = .);
+		PROVIDE (___sbss_start = .);
+		*(.sbss)
+		*(.sbss.*)
+		*(.scommon)
+		PROVIDE (__sbss_end = .);
+		PROVIDE (___sbss_end = .);
+		*(.bss)
+		*(.bss.*)
+		*(COMMON)
+		. = ALIGN(4);
+		__bss_end = .;
+		_end = .;
+		PROVIDE (end = .);
+	} 
+}
