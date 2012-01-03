@@ -1,4 +1,4 @@
-#! /usr/local/bin/perl
+#! /usr/bin/env perl
 #
 # ----------------------------------------------------------------------
 #     micro T-Kernel
@@ -199,8 +199,6 @@ open(TB_H, ">sysdepend/include/$tb_h") || die "can not open sysdepend/include/$t
 print TB_H <<EndOfTbHeader;
 /*
  *	micro T-Kernel system call branch table (Debugger Support)
- *
- *	   created from $infile
  */
 
 #include <machine.h>
@@ -245,8 +243,6 @@ for ( $i = 0; $i <= $#syscalls; $i++ ) {
 	print LIB <<EndOfIfLibHeader;
 /*
  *	micro T-Kernel SVC interface library ($cpu)
- *
- *	   created from $infile
  */
 
 EndOfIfLibHeader

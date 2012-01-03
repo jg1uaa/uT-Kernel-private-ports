@@ -26,6 +26,16 @@
 #  include <tk/sysdepend/app_at91/cpudef.h>
 #endif
 
+#if APP_H83052
+#  include <tk/sysdepend/app_h83052/cpuattr.h>
+#  include <tk/sysdepend/app_h83052/cpudef.h>
+#endif
+
+#if APP_H83069
+#  include <tk/sysdepend/app_h83069/cpuattr.h>
+#  include <tk/sysdepend/app_h83069/cpudef.h>
+#endif
+
 #if APP_H8S2212
 #  include <tk/sysdepend/app_h8s2212/cpuattr.h>
 #  include <tk/sysdepend/app_h8s2212/cpudef.h>

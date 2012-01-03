@@ -121,14 +121,14 @@ $(TARGET_ROM:%.rom=%.mot): $(TARGET_ROM)
 	$(OBJCOPY) $(OUTPUT_SREC) $< $@
 
 tkernel:
-	( cd $(OBJ_TKERNEL_PATH) ; make source ; make)
+	( cd $(OBJ_TKERNEL_PATH) ; $(MAKE) source ; $(MAKE))
 
 sysinit:
-	( cd $(OBJ_SYSINIT_PATH) ; make )
+	( cd $(OBJ_SYSINIT_PATH) ; $(MAKE) )
 
 tstdlib:
-	make tstdlib_source
-	make tstdlib_obj
+	$(MAKE) tstdlib_source
+	$(MAKE) tstdlib_obj
 
 tstdlib_source: $(TSTDLIB_ORGSRC)
 	(cd $(TSTDLIB_S); \
@@ -145,13 +145,13 @@ $(TSTDLIB_TARGET): $(TSTDLIB_OBJ)
   endif
 
 lib:
-	(cd $(LIBRARY_PATH); make)
+	(cd $(LIBRARY_PATH); $(MAKE))
 
 clean: clean_source
-	( cd $(OBJ_TKERNEL_PATH) ; make clean clean_source)
-	( cd $(OBJ_SYSINIT_PATH) ; make clean )
+	( cd $(OBJ_TKERNEL_PATH) ; $(MAKE) clean clean_source)
+	( cd $(OBJ_SYSINIT_PATH) ; $(MAKE) clean )
 	$(RM) $(OBJ) $(TARGET_CRT0) $(TSTDLIB_OBJ) $(TSTDLIB_TARGET) $(ALL) $(DEPS)
-	( cd $(LIBRARY_PATH) ; make clean)
+	( cd $(LIBRARY_PATH) ; $(MAKE) clean)
 
 clean_source:
 	(cd $(TSTDLIB_S)/func ; $(RM) $(TSTDLIB_FUNCSRC))

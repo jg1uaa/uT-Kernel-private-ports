@@ -19,6 +19,7 @@ case $os in
   SunOS)	platform=$os-`uname -p` ;;
   Linux)	platform=$os-`uname -m` ;;
   FreeBSD)	platform=$os-`uname -p` ;;
+  OpenBSD)	platform=$os-`uname -m` ;;
   *)		platform=unknown ;;
 esac
 

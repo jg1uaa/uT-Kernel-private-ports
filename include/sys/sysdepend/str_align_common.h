@@ -25,6 +25,14 @@
 #  include <sys/sysdepend/app_at91/str_align_depend.h>
 #endif
 
+#ifdef APP_H83052
+#  include <sys/sysdepend/app_h83052/str_align_depend.h>
+#endif
+
+#ifdef APP_H83069
+#  include <sys/sysdepend/app_h83069/str_align_depend.h>
+#endif
+
 #ifdef APP_H8S2212
 #  include <sys/sysdepend/app_h8s2212/str_align_depend.h>
 #endif

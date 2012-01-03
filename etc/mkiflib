@@ -1,4 +1,4 @@
-#! /usr/local/bin/perl
+#! /usr/bin/env perl
 #
 # ----------------------------------------------------------------------
 #     micro T-Kernel
@@ -172,8 +172,6 @@ open(FN_H, ">sysdepend/include/$fn_h32") || die "can not open sysdepend/include/
 print FN_H <<EndOfFnHeader;
 /*
  *	Extended SVC function code
- *
- *	   created from $infile
  */
 
 EndOfFnHeader
@@ -215,8 +213,6 @@ open(FN_H, ">sysdepend/include/$fn_h16") || die "can not open sysdepend/include/
 print FN_H <<EndOfFnHeader;
 /*
  *	Extended SVC function code
- *
- *	   created from $infile
  */
 
 EndOfFnHeader
@@ -291,8 +287,6 @@ $int_bitwidth = 32;    #int width
 print IF_H <<EndOfIfHeader;
 /*
  *	Extended SVC parameter packet
- *
- *	   created from $infile
  */
 
 #include <basic.h>
@@ -335,8 +329,6 @@ $int_bitwidth = 16;    #int width
 print IF_H <<EndOfIfHeader;
 /*
  *	Extended SVC parameter packet
- *
- *	   created from $infile
  */
 
 #include <basic.h>
@@ -387,8 +379,6 @@ for ( $i = 0; $i <= $#syscalls; $i++ ) {
 	print LIB <<EndOfIfLibHeader;
 /*
  *	T-Kernel extended SVC interface library ($cpu)
- *
- *	   created from $infile
  */
 
 EndOfIfLibHeader

@@ -28,20 +28,20 @@ all: $(LIB_SYSDEP_TARGET) $(LIB_CPUDEP_TARGET)
 
 $(LIB_SYSDEP_TARGET):
 	cd ../../$@/build/$(TETYPE)_$(MACHINE) ; \
-	make ; \
-	make install
+	$(MAKE) ; \
+	$(MAKE) install
 
 $(LIB_CPUDEP_TARGET):
 	cd ../../$@/build/$(MACHINE) ; \
-	make ; \
-	make install
+	$(MAKE) ; \
+	$(MAKE) install
 
 clean:
 	@( cd ../.. ; \
 	for dir in $(LIB_SYSDEP_TARGET); do \
-		( cd $$dir/build/$(TETYPE)_$(MACHINE) ; make clean ) ; \
+		( cd $$dir/build/$(TETYPE)_$(MACHINE) ; $(MAKE) clean ) ; \
 	done ; \
 	for dir in $(LIB_CPUDEP_TARGET); do \
-		( cd $$dir/build/$(MACHINE) ; make clean ) ; \
+		( cd $$dir/build/$(MACHINE) ; $(MAKE) clean ) ; \
 	done ) ;
 	rm -rf $(addsuffix .a, $(LIB_ARCHIVE_OBJ)) *.o \#*.o.* \#*.a.*

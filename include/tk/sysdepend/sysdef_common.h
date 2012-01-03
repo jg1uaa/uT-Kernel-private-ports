@@ -26,6 +26,14 @@
 #  include <tk/sysdepend/app_at91/sysdef_depend.h>
 #endif
 
+#if APP_H83052
+#  include <tk/sysdepend/app_h83052/sysdef_depend.h>
+#endif
+
+#if APP_H83069
+#  include <tk/sysdepend/app_h83069/sysdef_depend.h>
+#endif
+
 #if APP_H8S2212
 #  include <tk/sysdepend/app_h8s2212/sysdef_depend.h>
 #endif

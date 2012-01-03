@@ -1,7 +1,5 @@
 /*
  *	micro T-Kernel system call branch table
- *
- *	   created from /usr/local/te/include/tk/syscall.h
  */
 
 #include <machine.h>

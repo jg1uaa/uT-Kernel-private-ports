@@ -1,7 +1,5 @@
 /*
  *	micro T-Kernel system call branch table (Debugger Support)
- *
- *	   created from /usr/local/te/include/tk/dbgspt.h
  */
 
 #include <machine.h>
