@@ -49,3 +49,10 @@ EXPORT void knl_cpu_shutdown( void )
 {
 }
 #endif /* USE_CLEANUP */
+
+/*----------------------------------------------------------------------*/
+/*	offset data in TCB						*/
+/*----------------------------------------------------------------------*/
+EXPORT	const UW	TCB_tskid = offsetof(TCB, tskid);
+EXPORT	const UW	TCB_state = offsetof(TCB, state);
+EXPORT	const UW	CTXB_ssp = offsetof(TCB, tskctxb.ssp);
