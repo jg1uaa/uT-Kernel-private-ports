@@ -1,0 +1,818 @@
+micro T-Kernel Implementation Specification
+
+Version 1.01.01
+January, 2012
+
+
+1 CPU
+
+1.1 Hardware Specifications
+
+- H8/3069 edition
+
+	CPU:	Renesas H8/3069 @20MHz
+	ROM:	512kB (On-chip FlashROM)
+	RAM:	16kB (On-chip SRAM)
+
+	Target board: Akizuki Denshi AKI-H8/3069F micom LAN board [K-00168]
+	(http://akizukidenshi.com/catalog/g/gK-00168/)
+
+	* RAM kernel requires K-00168's on-board RAM(2MB) with H8 Monitor
+	  (http://www.mit.pref.miyagi.jp/embedded/consortium/h8mon.html).
+
+	* ROM kernel requires on-chip resources only.
+	  Other boards are expected to work (but not tested).
+
+- H8/3052 edition
+
+	CPU:	Renesas H8/3052 @25MHz
+	ROM:	512kB (On-chip FlashROM)
+	RAM:	8kB (On-chip SRAM)
+
+	Target board: Akizuki Denshi AKI-H8/3052LAN board [K-00211]
+	(http://akizukidenshi.com/catalog/g/gK-00211/)
+
+	* RAM kernel requires K-00211's on-board SRAM(128kB) with H8 Monitor
+	  (http://www.mit.pref.miyagi.jp/embedded/consortium/h8mon.html).
+
+	* ROM kernel requires on-chip resources only.
+	  Other boards are expected to work (but not tested).
+
+1.2 Protection Levels and Operating Modes
+
+Since this system operates in single CPU operating mode, there is no switch-
+over of the protection level. Even if any of the protection level is specified,
+it shall be treated as protection level 0.
+
+2 Memory
+
+2.1 H8/3069 edition
+
+2.1.1 Overall Memory Map
+
+Supported CPU operating mode:
+	Mode 5 (16Mbyte expanded mode with on-chip ROM enabled)
+	Mode 7 (single-chip advanced mode)
+
+In any CPU operating mode, the EMC bit in BCR register must be '1'.
+
+	0x000000	+-----------------------+
+			|On-chip ROM (512kB)	|	0x000000-0x07ffff
+	0x080000	+-----------------------+
+			:(External		:
+			:      address space)(*):
+	0x400000	+-----------------------+
+			|External RAM (2MB)  (*)|	0x400000-0x5fffff
+	0x600000	+-----------------------+		
+			:(External		:
+			:      address space)(*):
+	0xfee000	+-----------------------+
+			|Internal		|
+			|       I/O registers(1)|
+	0xfee100	+-----------------------+
+			:(External		:
+			:      address space)(*):
+	0xffbf20	+-----------------------+
+			|On-chip RAM (16kB)	|	0xffbf20-0xffff1f
+	0xffff20	+-----------------------+
+			|Internal		|
+			|       I/O registers(2)|
+	0xffffea	+-----------------------+
+			:(External		:
+			:      address space)(*):
+	0xffffff	+-----------------------+
+
+			(*) Available when Mode 5
+
+2.1.2 ROM Memory Map and External RAM Memory Map
+
+Space of 512kB is implemented in on-chip ROM, and space of 2MB is implemented
+in external RAM. The on-chip ROM/external RAM memory map is shown below.
+
+- ROM kernel
+
+	0x000000	+-----------------------+
+			|Interrupt Exception	|	0x000000-0x0000ff
+			|  Handling Vector Table|
+	0x000100	+-----------------------+
+			|micro T-Kernel code	|
+			+- - - - - - - - - - - -+
+			|(unused)		|
+	0x080000	+-----------------------+
+
+	0x400000	+-----------------------+
+			|(unused)		|	0x400000-0x5fffff
+	0x600000	+-----------------------+
+
+Vector table and micro T-Kernel code shall be located in the on-chip ROM.
+
+- RAM kernel
+
+	0x000000	+-----------------------+
+			|H8 Monitor		|	0x000000-0x07ffff
+	0x080000	+-----------------------+
+
+	0x400000	+-----------------------+
+			|micro T-Kernel code	|	0x400000-0x5fffff
+			+- - - - - - - - - - - -+
+			|(unused)		|
+	0x600000	+-----------------------+
+
+H8 Monitor occupies on-chip ROM, and it provides interrupt exception handling
+vector table in on-chip RAM. micro T-Kernel code shall be located in the
+external RAM.
+
+2.1.3 On-chip RAM Memory Map
+
+Space of 16kB is implemented in on-chip RAM. The on-chip RAM memory map is
+shown below.
+
+	0xffbf20	+-----------------------+
+			|H8 Monitor:         (*)|
+			|              work area|
+	0xffc000	+-----------------------+
+			|H8 Monitor:         (*)|
+			|Interrupt Exception	|
+			|  Handling Vector Table|
+	0xffc100	+-----------------------+
+			|.data			|
+			+- - - - - - - - - - - -+
+			|.bss (NoInit)		|
+			+- - - - - - - - - - - -+
+			|.bss			|
+			+- - - - - - - - - - - -+	<-SYSTEMAREA_TOP
+			|micro T-Kernel		|
+			|        management area|
+	0xfffe60	+-----------------------+	<-SYSTEMAREA_END
+			|Interrupt stack	|
+			|              (192byte)|
+	0xffff20	+-----------------------+	<-sp initial value
+
+			(*) ROM kernel: unused
+			NoInit: .bss is not cleared to zero in initialization.
+
+.data and .bss are located in ascending order from the lower byte of the
+on-chip RAM.
+
+The micro T-Kernel management area is memory space dynamically managed by the
+micro T-Kernel memory management function. 
+
+Normally, all unused memory spaces are allocated to the micro T-Kernel
+management area, but this can be changed in system configuration.
+micro T-Kernel management area is allocated to the designated area between
+"SYSTEMAREA_TOP" and "SYSTEMAREA_END" in configuration file,
+utk_config_depend.h.
+
+2.2 H8/3052 edition
+
+2.2.1 Overall Memory Map
+
+Supported CPU operating mode:
+	Mode 6 (16Mbyte expanded mode with on-chip ROM enabled)
+	Mode 7 (single-chip advanced mode)
+
+	0x000000	+-----------------------+
+			|On-chip ROM (512kB)	|	0x000000-0x07ffff
+	0x080000	+-----------------------+
+			:(External		:
+			:      address space)(*):
+	0x220000	+-----------------------+
+			|External RAM (128kB)(*)|	0x220000-0x23ffff
+	0x240000	+-----------------------+		
+			:(External		:
+			:      address space)(*):
+	0xffdf10	+-----------------------+
+			|On-chip RAM (8kB)	|	0xffdf10-0xffff0f
+	0xffff10	+-----------------------+
+			:(External		:
+			:      address space)(*):
+	0xffff1c	+-----------------------+
+			|Internal I/O registers	|
+	0xffffff	+-----------------------+
+
+			(*) Available when Mode 6
+
+2.2.2 ROM Memory Map and External RAM Memory Map
+
+Space of 512kB is implemented in on-chip ROM, and space of 128kB is implemented
+in external RAM. The on-chip ROM/external RAM memory map is shown below.
+
+- ROM kernel
+
+	0x000000	+-----------------------+
+			|Interrupt Exception	|	0x000000-0x0000ff
+			|  Handling Vector Table|
+	0x000100	+-----------------------+
+			|micro T-Kernel code	|
+			+- - - - - - - - - - - -+
+			|(unused)		|
+	0x080000	+-----------------------+
+
+	0x220000	+-----------------------+
+			|(unused)		|	0x220000-0x23ffff
+	0x240000	+-----------------------+
+
+Vector table and micro T-Kernel code shall be located in the on-chip ROM.
+
+- RAM kernel
+
+	0x000000	+-----------------------+
+			|H8 Monitor		|	0x000000-0x07ffff
+	0x080000	+-----------------------+
+
+	0x220000	+-----------------------+
+			|micro T-Kernel code	|	0x220000-0x23ffff
+			+- - - - - - - - - - - -+
+			|(unused)		|
+	0x240000	+-----------------------+
+
+H8 Monitor occupies on-chip ROM, and it provides interrupt exception handling
+vector table in on-chip RAM. micro T-Kernel code shall be located in the
+external RAM.
+
+2.2.3 On-chip RAM Memory Map
+
+Space of 8kB is implemented in on-chip RAM. The on-chip RAM memory map is
+shown below.
+
+	0xffdf10	+-----------------------+
+			|H8 Monitor:         (*)|
+			|              work area|
+	0xffe000	+-----------------------+
+			|H8 Monitor:         (*)|
+			|Interrupt Exception	|
+			|  Handling Vector Table|
+	0xffe100	+-----------------------+
+			|.data			|
+			+- - - - - - - - - - - -+
+			|.bss (NoInit)		|
+			+- - - - - - - - - - - -+
+			|.bss			|
+			+- - - - - - - - - - - -+	<-SYSTEMAREA_TOP
+			|micro T-Kernel		|
+			|        management area|
+	0xfffe50	+-----------------------+	<-SYSTEMAREA_END
+			|Interrupt stack	|
+			|              (192byte)|
+	0xffff10	+-----------------------+	<-sp initial value
+
+			(*) ROM kernel: unused
+			NoInit: .bss is not cleared to zero in initialization.
+
+.data and .bss are located in ascending order from the lower byte of the
+on-chip RAM.
+
+The micro T-Kernel management area is memory space dynamically managed by the
+micro T-Kernel memory management function. 
+
+Normally, all unused memory spaces are allocated to the micro T-Kernel
+management area, but this can be changed in system configuration.
+micro T-Kernel management area is allocated to the designated area between
+"SYSTEMAREA_TOP" and "SYSTEMAREA_END" in configuration file,
+utk_config_depend.h.
+
+2.3 Stacks
+
+micro T-Kernel has the following two kinds of stacks.
+
+(1) System stack
+(2) Interrupt stack
+
+For details, see "micro T-Kernel Implementation Specification for
+H8S/2212 (version 1.01.01)".
+
+3 Interrupts and Exceptions
+
+3.1 Interrupt Definition Numbers
+
+The immediate values of vector number shall be used by dintno, the interrupt
+definition numbers defined with tk_def_int().
+
+Following is the Interrupt Exception Handling Vector Table.
+
+(H8/3069 edition)
+	Vector Address	Vector No	Interrupt Sources
+	0x000000	0		reset
+	0x000004	1		reserved
+	0x000008	2		reserved
+	0x00000c	3		reserved
+	0x000010	4		reserved
+	0x000014	5		reserved
+	0x000018	6		reserved
+	0x00001c	7		NMI
+	0x000020	8		trap (#0)
+	0x000024	9		trap (#1)
+	0x000028	10		trap (#2)
+	0x00002c	11		trap (#3)
+	0x000030	12		IRQ0
+	0x000034	13		IRQ1
+	0x000038	14		IRQ2
+	0x00003c	15		IRQ3
+	0x000040	16		IRQ4
+	0x000044	17		IRQ5
+	0x000048	18		reserved
+	0x00004c	19		reserved
+	0x000050	20		WOVI
+	0x000054	21		CMI
+	0x000058	22		reserved
+	0x00005c	23		ADI
+	0x000060	24		IMIA0
+	0x000064	25		IMIB0
+	0x000068	26		OVI0
+	0x00006c	27		reserved
+	0x000070	28		IMIA1
+	0x000074	29		IMIB1
+	0x000078	30		OVI1
+	0x00007c	31		reserved
+	0x000080	32		IMIA2
+	0x000084	33		IMIB2
+	0x000088	34		OVI2
+	0x00008c	35		reserved
+	0x000090	36		CMIA0
+	0x000094	37		CMIB0
+	0x000098	38		CMIA1/CMIB1
+	0x00009c	39		TOVI0/TOVI1
+	0x0000a0	40		CMIA2
+	0x0000a4	41		CMIB2
+	0x0000a8	42		CMIA3/CMIB3
+	0x0000ac	43		TOVI2/TOVI3
+	0x0000b0	44		DEND0A
+	0x0000b4	45		DEND0B
+	0x0000b8	46		DEND1A
+	0x0000bc	47		DEND1B
+	0x0000c0	48		reserved
+	0x0000c4	49		reserved
+	0x0000c8	50		reserved
+	0x0000cc	51		reserved
+	0x0000d0	52		ERI0
+	0x0000d4	53		RXI0
+	0x0000d8	54		TXI0
+	0x0000dc	55		TEI0
+	0x0000e0	56		ERI1
+	0x0000e4	57		RXI1
+	0x0000e8	58		TXI1
+	0x0000ec	59		TEI1
+	0x0000f0	60		ERI2
+	0x0000f4	61		RXI2
+	0x0000f8	62		TXI2
+	0x0000fc	63		TEI2
+
+(H8/3052 edition)
+	Vector Address	Vector No	Interrupt Sources
+	0x000000	0		reset
+	0x000004	1		reserved
+	0x000008	2		reserved
+	0x00000c	3		reserved
+	0x000010	4		reserved
+	0x000014	5		reserved
+	0x000018	6		reserved
+	0x00001c	7		NMI
+	0x000020	8		trap (#0)
+	0x000024	9		trap (#1)
+	0x000028	10		trap (#2)
+	0x00002c	11		trap (#3)
+	0x000030	12		IRQ0
+	0x000034	13		IRQ1
+	0x000038	14		IRQ2
+	0x00003c	15		IRQ3
+	0x000040	16		IRQ4
+	0x000044	17		IRQ5
+	0x000048	18		reserved
+	0x00004c	19		reserved
+	0x000050	20		WOVI
+	0x000054	21		CMI
+	0x000058	22		reserved
+	0x00005c	23		reserved
+	0x000060	24		IMIA0
+	0x000064	25		IMIB0
+	0x000068	26		OVI0
+	0x00006c	27		reserved
+	0x000070	28		IMIA1
+	0x000074	29		IMIB1
+	0x000078	30		OVI1
+	0x00007c	31		reserved
+	0x000080	32		IMIA2
+	0x000084	33		IMIB2
+	0x000088	34		OVI2
+	0x00008c	35		reserved
+	0x000090	36		IMIA3
+	0x000094	37		IMIB3
+	0x000098	38		OVI3
+	0x00009c	39		reserved
+	0x0000a0	40		IMIA4
+	0x0000a4	41		IMIB4
+	0x0000a8	42		OVI4
+	0x0000ac	43		reserved
+	0x0000b0	44		DEND0A
+	0x0000b4	45		DEND0B
+	0x0000b8	46		DEND1A
+	0x0000bc	47		DEND1B
+	0x0000c0	48		reserved
+	0x0000c4	49		reserved
+	0x0000c8	50		reserved
+	0x0000cc	51		reserved
+	0x0000d0	52		ERI0
+	0x0000d4	53		RXI0
+	0x0000d8	54		TXI0
+	0x0000dc	55		TEI0
+	0x0000e0	56		ERI1
+	0x0000e4	57		RXI1
+	0x0000e8	58		TXI1
+	0x0000ec	59		TEI1
+	0x0000f0	60		ADI
+	0x0000f4	--		----
+	0x0000f8	--		----
+	0x0000fc	--		----
+
+3.2 TRAPA exception assignments
+
+The TRAPA instruction uses trapa 0 to trapa 2, and is assigned to the
+definition numbers 8 to 10.
+Each TRAPA instruction is used as follows.
+
+	trapa 0	micro T-Kernel system call/extended SVC
+	trapa 1	"tk_ret_int()" system call
+	trapa 2	Task dispatcher call
+	trapa 3	(unused)
+
+3.3 Interrupt handler
+
+See "micro T-Kernel Implementation Specification for H8S/2212".
+
+4 Initialization and Startup Processing
+
+4.1 micro T-Kernel Startup Procedure
+
+When system is reset, micro T-Kernel starts up.
+The procedures from the startup of micro T-Kernel to the call of main function
+are as follows.
+
+icrt0.S
+	(1) Set the stack pointer [start:]
+	(2) Initialize CCR [start:]
+	(3) (RAM kernel only)
+	    Set the initial value of .vector (ROM->RAM) [vector_loop:]
+	(4) Set the initial value of .data (ROM->RAM) [data_loop:]
+	(5) Clear .bss to 0 [bss_loop:]
+	(6) Calculate the range of micro T-Kernel management area [bss_done:]
+	(7) Call "main" function (sysinit_main.c) [kernel_start:]
+
+4.2 User initialization program
+
+See "micro T-Kernel Implementation Specification for H8S/2212".
+
+5 micro T-Kernel Implementation Definitions
+
+5.1 System State Detection
+
+(1) Task-independent portion (interrupt hander or time event handler)
+
+Detection is made based on a software flag set in micro T-Kernel.
+
+	knl_taskindp = 0	Task portion
+	knl_taskindp > 0	Task-independent portion
+
+(2) Quasi-task portion (extended SVC handler)
+
+Detection is made based on a software flag set in micro T-Kernel.
+
+	sysmode of TCB = 0	Task portion
+	sysmode of TCB > 0	Quasi-task portion
+
+5.2 Exceptions/Interrupts Used by micro T-Kernel
+
+	trapa 0	micro T-Kernel system calls/extended SVC
+	trapa 1	"tk_ret_int()" system call
+	trapa 2	Task dispatcher call
+	trapa 3	(unused)
+
+	dintno 24	IMIA0
+
+5.3 System Call/Extended SVC Interface
+
+The basics, see "micro T-Kernel Implementation Specification for H8S/2212".
+The differencies of H8/300H edition is shown below.
+
+	(Note: No EXR register operation.)
+
+(1) System call interface
+
+Parameters of up to third are set to registers, and the ones of fourth
+or more are saved onto the stack. A system call is invoked by TRAPA #1
+(trapa #TRAP_SVC).
+
+An example of system call interface implementation is shown as follows.
+
+ER tk_xxx_yyy(p1, p2, p3, p4, p5)
+
+//				stack state	  
+//	High Address	    +-------------------+
+//			    | 5th arg (low)	|	
+//			    | 5th arg (high)	|	
+//			    | 4th arg (low)	|
+//			    | 4th arg (high)	|
+//			    | PC (low)		| saved by I/F call
+//			    | PC (high)		|
+//			    | R0		|	
+//			    | PC (low)		| saved by trapa
+//	er7, er5 =>	    | CCR:PC (high)	|
+//	Low Address	    +-------------------+
+//			     <-- 16bit width -->	
+//			     
+Csym(tk_xxx_yyy):
+	push.w	r0
+	mov.w	function_code, r0
+#if USE_TRAP
+	trapa	#TRAP_SVC
+#else
+	jsr	Csym(knl_call_entry)
+#endif
+	inc.l	#2, er7
+	rts
+
+(2) Extended SVC interface library
+
+Regarding an extended SVC, arguments are wrapped in a packet by the caller,
+and the start address of packet is set in ER1 register. An extended SVC call
+is invoked by TRAPA #1 (trapa #TRAP_SVC).
+
+Normally, the packet is created in a stack area, but can be used in other
+areas as well. There are no restrictions on the number or types of arguments
+since argument is wrapped into packet.
+
+An example of extended SVC interface implementation is shown below.
+
+W zxxx_yyy(p1, p2, p3, p4, p5, p6)
+
+(H8/3069, H8/3052 edition)
+Csym(${func}):
+	push.l	er1		// Save register arguments on stack
+	push.l	er0
+	mov.l	er7, er1
+	push.l	er2
+	mov.w	@zxxx_yyy, r0	// er1 = arguments packet address
+	trapa	#TRAP_SVC
+	add.l	#12, er7
+	rts
+
+(3) Debugger Support Functions system call interface
+
+Debugger support functions are not supported.
+
+5.4 The stack when system call is invoked
+
+(1) C language I/F (func(arg1, arg2, ...))
+
+	High Address	    +-------------------+
+			    | ...		|
+			    | 5th arg (low)	|	
+			    | 5th arg (high)	|	
+			    | 4th arg (low)	|
+			    | 4th arg (high)	|
+			    | PC (low)		| saved by I/F call
+			    | PC (high)		|
+	Low Address	    +-------------------+
+			     <-- 16bit width -->	
+
+	er0 = 1st arg
+	er1 = 2nd arg
+	er2 = 3rd arg
+
+(2) knl_call_entry top (Immediately after trapa #TRAP_SVC is executed)
+
+	High Address	    +-------------------+
+			    | ...		|
+			    | 5th arg (low)	|	
+			    | 5th arg (high)	|	
+			    | 4th arg (low)	|
+			    | 4th arg (high)	|
+			    | PC (low)		| saved by I/F call
+			    | PC (high)		|
+			    | R0		|	
+			    | PC (low)		| saved by trapa
+		SP =>	    | CCR:PC (high)	|
+	Low Address	    +-------------------+
+			     <-- 16bit width -->	
+
+	r0  = fncd
+	e0  = Higher 16bit of 1st arg
+	r0 which was saved to stack = Lower 16bit of 1st arg
+	er1 = 2nd arg
+	er2 = 3rd arg
+
+(3) Immediately after bpl l_esvc_function is executed
+
+	High Address	    +-------------------+
+			    | ...		|
+			    | 5th arg (low)	|	
+			    | 5th arg (high)	|	
+			    | 4th arg (low)	|
+			    | 4th arg (high)	|
+			    | PC (low)		| saved by I/F call
+			    | PC (high)		|
+			    | R0		|	
+			    | PC (low)		| saved by trapa
+			    | CCR:PC (high)	|
+			    | R4		|
+			    | E4		|
+			    | R5		|
+			    | E5		|
+			    | R6		|
+		er5, SP =>  | E6		|
+	Low Address	    +-------------------+
+			     <-- 16bit width -->	
+
+	r0  = fncd
+	e0  = Higher 16bit of 1st arg
+	r0 which was saved to stack = Lower 16bit of 1st arg
+	er1 = 2nd arg
+	er2 = 3rd arg
+	r4  = fncd
+
+(4) Immediately before system call is invoked
+
+	High Address	    +-------------------+
+			    | ...		|
+			    | 5th arg (low)	|	
+			    | 5th arg (high)	|	
+			    | 4th arg (low)	|
+			    | 4th arg (high)	|
+			    | PC (low)		| saved by I/F call
+			    | PC (high)		|
+			    | R0		|	
+			    | PC (low)		| saved by trapa
+			    | CCR:PC (high)	|
+			    | R4		|
+			    | E4		|
+			    | R5		|
+			    | E5		|
+			    | R6		|
+		er5 =>	    | E6		|
+			    | (5th arg (low))	|
+			    | (5th arg (high))	|
+			    | (4th arg (low))	|
+			    | (4th arg (high))	|
+	Low Address	    +-------------------+
+			     <-- 16bit width -->	
+
+	er0 = 1st arg
+	er1 = 2nd arg
+	er2 = 3rd arg
+
+5.5 Stack when the extended SVC is invoked
+
+(1) C language I/F (func(arg1, arg2, ...))
+
+	High Address	    +-------------------+
+			    | ...		|
+			    | 5th arg (low)	|	
+			    | 5th arg (high)	|	
+			    | 4th arg (low)	|
+			    | 4th arg (high)	|
+			    | PC (low)		| saved by I/F call
+			    | PC (high)		|
+	Low Address	    +-------------------+
+			     <-- 16bit width -->	
+
+	er0 = 1st arg
+	er1 = 2nd arg
+	er3 = 3rd arg
+
+(2) knl_call_entry top (immediately after trapa #TRAP_SVC is executed)
+
+	High Address	    +-------------------+
+			    | ...		|
+			    | 5th arg (low)	|	
+			    | 5th arg (high)	|	
+			    | 4th arg (low)	|
+			    | 4th arg (high)	|
+			    | PC (low)		| saved by I/F call
+			    | PC (high)		|
+			    | 2nd arg (low)	|
+			    | 2nd arg (high)	|
+			    | 1st arg (low)	|
+		er1 =>	    | 1st arg (high)	|
+			    | 3rd arg (low)	|
+			    | 3rd arg (high)	|
+			    | PC (low)		| saved by trapa
+		SP =>	    | CCR:PC (high)	|
+	Low Address	    +-------------------+
+			     <-- 16bit width -->	
+
+	r0  = fncd
+	er1 = pk_para
+
+(3) l_esvc_function top
+
+	High Address	    +-------------------+
+			    | ...		|
+			    | 5th arg (low)	|	
+			    | 5th arg (high)	|	
+			    | 4th arg (low)	|
+			    | 4th arg (high)	|
+			    | PC (low)		| saved by I/F call
+			    | PC (high)		|
+			    | 2nd arg (low)	|
+			    | 2nd arg (high)	|
+			    | 1st arg (low)	|
+		er1 =>	    | 1st arg (high)	|
+			    | 3rd arg (low)	|
+			    | 3rd arg (high)	|
+			    | PC (low)		| saved by trapa
+			    | CCR:PC (high)	|
+			    | R4		|
+			    | E4		|
+			    | R5		|
+			    | E5		|
+			    | R6		|
+		er5, SP =>  | E6		|
+	Low Address	    +-------------------+
+			     <-- 16bit width -->	
+
+	r0  = fncd
+	er1 = pk_para
+
+(4) knl_svc_ientry top
+
+	High Address	    +-------------------+
+			    | ...		|
+			    | 5th arg (low)	|	
+			    | 5th arg (high)	|	
+			    | 4th arg (low)	|
+			    | 4th arg (high)	|
+			    | 3rd arg (low)	|
+			    | 3rd arg (high)	|
+			    | 2nd arg (low)	|
+			    | 2nd arg (high)	|
+			    | 1st arg (low)	|
+		er0 =>	    | 1st arg (high)	|
+			    | 3rd arg (low)	|
+			    | 3rd arg (high)	|
+			    | PC (low)		| saved by trapa
+			    | CCR:PC (high)	|
+			    | R4		|
+			    | E4		|
+			    | R5		|
+			    | E5		|
+			    | R6		|
+		er5, SP =>  | E6		|
+	Low Address	    +-------------------+
+			     <-- 16bit width -->	
+
+	er0 = pk_para
+	r1  = fncd
+	er4 = ret_addr (saved by I/F call)
+
+5.6 Stack when an interrupt is raised
+
+See "micro T-Kernel Implementation Specification for H8S/2212".
+
+5.7 Task implementation-dependent definitions
+
+See "micro T-Kernel Implementation Specification for H8S/2212".
+
+5.8 Task registers
+
+See "micro T-Kernel Implementation Specification for H8S/2212".
+
+6 System Configuration Data
+
+6.1 Setting value of utk_config_depend.h
+
+See "micro T-Kernel Implementation Specification for H8S/2212".
+
+These values are modified to fit each CPU. To save memory usage, some kinds of
+task objects are disabled. User needs to adjust these values to use disabled
+objects.
+
+	- SYSTEMAREA_TOP, SYSTEMAREA_END, RI_USERAREA_TOP, RI_INTSTACK
+	- CFN_TIMER_PERIOD
+	- CFN_MAX_TSKID, CFN_MAX_SEMID, CFN_MAX_FLGID, CFN_MAX_MBXID,
+	  CFN_MAX_MTXID, CFN_MAX_MBFID, CFN_MAX_PORID, CFN_MAX_MPLID,
+	  CFN_MAX_MPFID, CFN_MAX_CYCID, CFN_MAX_ALMID, CFN_MAX_SSYID,
+	  CFN_MAX_REGDEV, CFN_MAX_OPNDEV, CFN_MAX_REQDEV
+
+6.2 makerules
+
+See "micro T-Kernel Implementation Specification for H8S/2212".
+
+The default value of option "trap" is "on".
+
+7. Hints for Make
+
+Remember to set environmental variables. Here is a sample :-
+
+	$ export BD=/home/user/utkernel_source
+	$ export GNU_BD=/usr/local
+	$ export TOOL_ORIGIN=GNUh8300
+	$ export GNUh8300=/usr/local/h8300-elf
+
+To make, change working directory to $(BD)/kernel/sysmain/build/app_h83069 or
+$(BD)/kernel/sysmain/build/app_h83052 and type "make". Of course "make clean"
+cleans old-objects.
+
+	(Note for BSD users: use GNU Make, not BSD Make.)
+
+You will obtain "kernel-ram.mot" and "kernel-rom.mot".
+"kernel-ram.mot" is RAM kernel. This kernel runs with the monitor program.
+"kernel-rom.mot" is ROM kernel. You have to write this object to H8's FlashROM.
