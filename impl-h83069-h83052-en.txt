@@ -1,4 +1,4 @@
-micro T-Kernel Implementation Specification
+UNOFFICIAL micro T-Kernel Implementation Specification (H8/3069, H8/3052)
 
 Version 1.01.01
 January, 2012
@@ -278,8 +278,7 @@ micro T-Kernel has the following two kinds of stacks.
 (1) System stack
 (2) Interrupt stack
 
-For details, see "micro T-Kernel Implementation Specification for
-H8S/2212 (version 1.01.01)".
+For details, see "micro T-Kernel Implementation Specification for H8S/2212".
 
 3 Interrupts and Exceptions
 
@@ -544,7 +543,6 @@ An example of extended SVC interface implementation is shown below.
 
 W zxxx_yyy(p1, p2, p3, p4, p5, p6)
 
-(H8/3069, H8/3052 edition)
 Csym(${func}):
 	push.l	er1		// Save register arguments on stack
 	push.l	er0
@@ -795,8 +793,6 @@ objects.
 6.2 makerules
 
 See "micro T-Kernel Implementation Specification for H8S/2212".
-
-The default value of option "trap" is "on".
 
 7. Hints for Make
 

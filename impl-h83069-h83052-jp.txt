@@ -1,0 +1,764 @@
+H8/3069, H8/3052向けμT-Kernel（非公式版）実装仕様書
+
+Version 1.01.01
+2012年1月
+
+
+1 CPU
+
+1.1 ハードウェア仕様
+
+- H8/3069版
+
+	CPU:	Renesas H8/3069 @20MHz
+	ROM:	512kB（CPU内蔵）
+	RAM:	16kB（CPU内蔵）
+
+	AKI-H8/3069FフラッシュマイコンLANボード（秋月電子通商 K-00168）を
+	使用する。
+	(http://akizukidenshi.com/catalog/g/gK-00168/)
+
+	AKI-H8/3069FフラッシュマイコンLANボード上のDRAM(2MB)で動作させる場合
+	は、H8簡易モニタ
+	(http://www.mit.pref.miyagi.jp/embedded/consortium/h8mon.html)を使用す
+	る。
+
+	他のH8/3069ボードでも動作すると思われるが、動作は確認していない。
+
+- H8/3052版
+
+	CPU:	Renesas H8/3052 @25MHz
+	ROM:	512kB（CPU内蔵）
+	RAM:	8kB（CPU内蔵）
+
+	AKI-H8-LANボード（秋月電子通商 K-00211）を使用する。
+	(http://akizukidenshi.com/catalog/g/gK-00211/)
+
+	AKI-H8-LANボード上のSRAM(128kB)で動作させる場合は、H8簡易モニタ
+	(http://www.mit.pref.miyagi.jp/embedded/consortium/h8mon.html)を使用す
+	る。
+
+	他のH8/3052ボードでも動作すると思われるが、動作は確認していない。
+
+1.2 動作モードと保護レベル
+
+MMUやMPUが存在しないため、保護レベルの切り替えという概念は無い。
+保護レベルの指定は、全てレベル0として扱う。
+
+2 メモリマップ
+
+2.1 H8/3069版
+
+2.1.1 全体
+
+CPUの動作モードは、CPU内蔵のROM・RAMだけで動作させる場合は、モード7とする。
+AKI-H8/3069FフラッシュマイコンLANボード上のDRAMを使用する場合は、モード5。
+
+モードにかかわらず、EMCビットの設定は1とする。
+
+	0x000000	+-----------------------+
+			|内蔵ROM (512kB)	|	0x000000-0x07ffff
+	0x080000	+-----------------------+
+			:(外部アドレス空間)  (*):
+	0x400000	+-----------------------+
+			|外付DRAM (2MB)      (*)|	0x400000-0x5fffff
+	0x600000	+-----------------------+		
+			:(外部アドレス空間） (*):
+	0xfee000	+-----------------------+
+			|内部I/Oレジスタ(1)	|
+	0xfee100	+-----------------------+
+			:(外部アドレス空間） (*):
+	0xffbf20	+-----------------------+
+			|内蔵RAM (16kB)		|	0xffbf20-0xffff1f
+	0xffff20	+-----------------------+
+			|内部I/Oレジスタ(2)	|
+	0xffffea	+-----------------------+
+			:(外部アドレス空間)  (*):
+	0xffffff	+-----------------------+
+
+			(*)モード5のみ存在
+
+2.1.2 内蔵ROM領域／外付DRAM領域
+
+512kBの内蔵ROM領域・2MBの外付DRAM領域は、以下のように使用する。
+
+・H8簡易モニタを使用しない場合
+
+	0x000000	+-----------------------+
+			|割込例外ベクタテーブル	|	0x000000-0x0000ff
+	0x000100	+-----------------------+
+			|μT-Kernelコード	|
+			+- - - - - - - - - - - -+
+			|(未使用)		|
+	0x080000	+-----------------------+
+
+	0x400000	+-----------------------+
+			|(未使用)		|	0x400000-0x5fffff
+	0x600000	+-----------------------+
+
+内蔵ROMには、割込例外ベクタテーブルとμT-Kernelコードを配置する。
+
+・H8簡易モニタを使用する場合
+
+	0x000000	+-----------------------+
+			|H8簡易モニタ		|	0x000000-0x07ffff
+	0x080000	+-----------------------+
+
+	0x400000	+-----------------------+
+			|μT-Kernelコード	|	0x400000-0x5fffff
+			+- - - - - - - - - - - -+
+			|(未使用)		|
+	0x600000	+-----------------------+
+
+内蔵ROMは、H8簡易モニタが使用する。
+割込例外ベクタテーブルは、H8簡易モニタが内蔵RAM領域上に提供する（後述）。
+外付DRAM領域に、μT-Kernelコードを配置する。
+
+2.1.3 内蔵RAM領域
+
+16kBの内蔵RAM領域は、以下のように使用する。
+
+	0xffbf20	+-----------------------+
+			|モニタ・作業領域    (*)|
+	0xffc000	+-----------------------+
+			|モニタ・ベクタ領域  (*)|
+	0xffc100	+-----------------------+
+			|.data			|
+			+- - - - - - - - - - - -+
+			|.bss (NoInit)		|
+			+- - - - - - - - - - - -+
+			|.bss			|
+			+- - - - - - - - - - - -+	←SYSTEMAREA_TOP
+			|μT-Kernel管理領域	|
+	0xfffe60	+-----------------------+	←SYSTEMAREA_END
+			|割込スタック (192byte)	|
+	0xffff20	+-----------------------+	←sp初期値
+
+			(*)H8簡易モニタ使用時のみ存在
+			NoInit: ゼロ初期化されない.bss
+
+内蔵RAMの下位アドレスから、.dataおよび.bssを割り当てる。
+
+μT-Kernel管理領域は、μT-Kernelのメモリ管理機能が使用する。
+
+μT-Kernel管理領域は、設定ファイル(utk_config_depend.h)のSYSTEMAREA_TOP, SYSTE
+MAREA_ENDの指定された間の領域とする。通常は、空いているメモリ領域は全てμT-Ker
+nelのメモリ管理機能に割り当てられる。
+
+2.2 H8/3052版
+
+2.2.1 全体
+
+CPUの動作モードは、CPU内蔵のROM・RAMだけで動作させる場合は、モード7とする。
+AKI-H8-LANボード上のSRAMを使用する場合は、モード6。
+
+
+	0x000000	+-----------------------+
+			|内蔵ROM (512kB)	|	0x000000-0x07ffff
+	0x080000	+-----------------------+
+			:(外部アドレス空間)  (*):
+	0x220000	+-----------------------+
+			|外付SRAM (128kB)    (*)|	0x220000-0x23ffff
+	0x240000	+-----------------------+		
+			:(外部アドレス空間） (*):
+	0xffdf10	+-----------------------+
+			|内蔵RAM (8kB)		|	0xffdf10-0xffff0f
+	0xffff10	+-----------------------+
+			:(外部アドレス空間)  (*):
+	0xffff1c	+-----------------------+
+			|内部I/Oレジスタ(2)	|
+	0xffffff	+-----------------------+
+
+			(*)モード6のみ存在
+
+2.2.2 内蔵ROM領域／外付SRAM領域
+
+512kBの内蔵ROM領域・128kBの外付SRAM領域は、以下のように使用する。
+
+・H8簡易モニタを使用しない場合
+
+	0x000000	+-----------------------+
+			|割込例外ベクタテーブル	|	0x000000-0x0000ff
+	0x000100	+-----------------------+
+			|μT-Kernelコード	|
+			+- - - - - - - - - - - -+
+			|(未使用)		|
+	0x080000	+-----------------------+
+
+	0x220000	+-----------------------+
+			|(未使用)		|	0x220000-0x23ffff
+	0x240000	+-----------------------+
+
+内蔵ROMには、割込例外ベクタテーブルとμT-Kernelコードを配置する。
+
+・H8簡易モニタを使用する場合
+
+	0x000000	+-----------------------+
+			|H8簡易モニタ		|	0x000000-0x07ffff
+	0x080000	+-----------------------+
+
+	0x220000	+-----------------------+
+			|μT-Kernelコード	|	0x220000-0x23ffff
+			+- - - - - - - - - - - -+
+			|(未使用)		|
+	0x240000	+-----------------------+
+
+内蔵ROMは、H8簡易モニタが使用する。
+割込例外ベクタテーブルは、H8簡易モニタが内蔵RAM領域上に提供する（後述）。
+外付SRAM領域に、μT-Kernelコードを配置する。
+
+2.2.3 内蔵RAM領域
+
+8kBの内蔵RAM領域は、以下のように使用する。
+
+	0xffdf10	+-----------------------+
+			|モニタ・作業領域    (*)|
+	0xffe000	+-----------------------+
+			|モニタ・ベクタ領域  (*)|
+	0xffe100	+-----------------------+
+			|.data			|
+			+- - - - - - - - - - - -+
+			|.bss (NoInit)		|
+			+- - - - - - - - - - - -+
+			|.bss			|
+			+- - - - - - - - - - - -+	←SYSTEMAREA_TOP
+			|μT-Kernel管理領域	|
+	0xfffe50	+-----------------------+	←SYSTEMAREA_END
+			|割込スタック (192byte)	|
+	0xffff10	+-----------------------+	←sp初期値
+
+			(*)H8簡易モニタ使用時のみ存在
+			NoInit: ゼロ初期化されない.bss
+
+内蔵RAMの下位アドレスから、.dataおよび.bssを割り当てる。
+
+μT-Kernel管理領域は、μT-Kernelのメモリ管理機能が使用する。
+
+μT-Kernel管理領域は、設定ファイル(utk_config_depend.h)のSYSTEMAREA_TOP, SYSTE
+MAREA_ENDの指定された間の領域とする。通常は、空いているメモリ領域は全てμT-Ker
+nelのメモリ管理機能に割り当てられる。
+
+2.3 スタック
+
+以下の二種類のスタックが存在する。
+
+(1)システムスタック
+(2)割り込みスタック
+
+詳細は、μT-Kernel実装仕様書 H8S/2212版を参照。
+
+3 割り込み及び例外
+
+3.1 割り込み定義番号
+
+tk_def_int()で定義する割り込み定義番号(dintno)は、以下に示すベクタ番号の値を使
+用する。
+
+(H8/3069版)
+	ベクタアドレス	ベクタ番号	割り込み要因
+	0x000000	0		reset
+	0x000004	1		reserved
+	0x000008	2		reserved
+	0x00000c	3		reserved
+	0x000010	4		reserved
+	0x000014	5		reserved
+	0x000018	6		reserved
+	0x00001c	7		NMI
+	0x000020	8		trap (#0)
+	0x000024	9		trap (#1)
+	0x000028	10		trap (#2)
+	0x00002c	11		trap (#3)
+	0x000030	12		IRQ0
+	0x000034	13		IRQ1
+	0x000038	14		IRQ2
+	0x00003c	15		IRQ3
+	0x000040	16		IRQ4
+	0x000044	17		IRQ5
+	0x000048	18		reserved
+	0x00004c	19		reserved
+	0x000050	20		WOVI
+	0x000054	21		CMI
+	0x000058	22		reserved
+	0x00005c	23		ADI
+	0x000060	24		IMIA0
+	0x000064	25		IMIB0
+	0x000068	26		OVI0
+	0x00006c	27		reserved
+	0x000070	28		IMIA1
+	0x000074	29		IMIB1
+	0x000078	30		OVI1
+	0x00007c	31		reserved
+	0x000080	32		IMIA2
+	0x000084	33		IMIB2
+	0x000088	34		OVI2
+	0x00008c	35		reserved
+	0x000090	36		CMIA0
+	0x000094	37		CMIB0
+	0x000098	38		CMIA1/CMIB1
+	0x00009c	39		TOVI0/TOVI1
+	0x0000a0	40		CMIA2
+	0x0000a4	41		CMIB2
+	0x0000a8	42		CMIA3/CMIB3
+	0x0000ac	43		TOVI2/TOVI3
+	0x0000b0	44		DEND0A
+	0x0000b4	45		DEND0B
+	0x0000b8	46		DEND1A
+	0x0000bc	47		DEND1B
+	0x0000c0	48		reserved
+	0x0000c4	49		reserved
+	0x0000c8	50		reserved
+	0x0000cc	51		reserved
+	0x0000d0	52		ERI0
+	0x0000d4	53		RXI0
+	0x0000d8	54		TXI0
+	0x0000dc	55		TEI0
+	0x0000e0	56		ERI1
+	0x0000e4	57		RXI1
+	0x0000e8	58		TXI1
+	0x0000ec	59		TEI1
+	0x0000f0	60		ERI2
+	0x0000f4	61		RXI2
+	0x0000f8	62		TXI2
+	0x0000fc	63		TEI2
+
+(H8/3052版)
+	ベクタアドレス	ベクタ番号	割り込み要因
+	0x000000	0		reset
+	0x000004	1		reserved
+	0x000008	2		reserved
+	0x00000c	3		reserved
+	0x000010	4		reserved
+	0x000014	5		reserved
+	0x000018	6		reserved
+	0x00001c	7		NMI
+	0x000020	8		trap (#0)
+	0x000024	9		trap (#1)
+	0x000028	10		trap (#2)
+	0x00002c	11		trap (#3)
+	0x000030	12		IRQ0
+	0x000034	13		IRQ1
+	0x000038	14		IRQ2
+	0x00003c	15		IRQ3
+	0x000040	16		IRQ4
+	0x000044	17		IRQ5
+	0x000048	18		reserved
+	0x00004c	19		reserved
+	0x000050	20		WOVI
+	0x000054	21		CMI
+	0x000058	22		reserved
+	0x00005c	23		reserved
+	0x000060	24		IMIA0
+	0x000064	25		IMIB0
+	0x000068	26		OVI0
+	0x00006c	27		reserved
+	0x000070	28		IMIA1
+	0x000074	29		IMIB1
+	0x000078	30		OVI1
+	0x00007c	31		reserved
+	0x000080	32		IMIA2
+	0x000084	33		IMIB2
+	0x000088	34		OVI2
+	0x00008c	35		reserved
+	0x000090	36		IMIA3
+	0x000094	37		IMIB3
+	0x000098	38		OVI3
+	0x00009c	39		reserved
+	0x0000a0	40		IMIA4
+	0x0000a4	41		IMIB4
+	0x0000a8	42		OVI4
+	0x0000ac	43		reserved
+	0x0000b0	44		DEND0A
+	0x0000b4	45		DEND0B
+	0x0000b8	46		DEND1A
+	0x0000bc	47		DEND1B
+	0x0000c0	48		reserved
+	0x0000c4	49		reserved
+	0x0000c8	50		reserved
+	0x0000cc	51		reserved
+	0x0000d0	52		ERI0
+	0x0000d4	53		RXI0
+	0x0000d8	54		TXI0
+	0x0000dc	55		TEI0
+	0x0000e0	56		ERI1
+	0x0000e4	57		RXI1
+	0x0000e8	58		TXI1
+	0x0000ec	59		TEI1
+	0x0000f0	60		ADI
+	0x0000f4	--		----
+	0x0000f8	--		----
+	0x0000fc	--		----
+
+3.2 TRAPA命令の割り当て
+
+TRAPA命令は0〜2を使用する（対応する割り込み定義番号は8〜10）。
+
+	trapa 0	システムコール・拡張SVC
+	trapa 1	tk_ret_int()システムコール
+	trapa 2	タスクディスパッチャ
+	trapa 3	(未使用)
+
+3.3 割り込みハンドラ
+
+μT-Kernel実装仕様書 H8S/2212版を参照。
+
+4 初期化および起動処理
+
+4.1 起動手順
+
+システムがリセットされると、カーネルが起動する。
+カーネルが起動してから、main()関数が呼ばれるまでの処理は以下の通り。
+
+icrt0.S
+	(1)スタックポインタの設定 [start:]
+	(2)CCRの初期化 [start:]
+	(3)H8簡易モニタ・ユーザベクタエリアの設定 [vector_loop:]
+	   	※内蔵ROM上で動作する場合は、この処理は行わない
+	(4)データセクションの初期値設定(ROM→RAM) [data_loop:]
+	(5)BSSセクションのゼロクリア [bss_loop:]
+	(6)カーネル管理領域の範囲計算 [bss_done:]
+	(7)main関数(sysinit_main.c)の呼び出し [kernel_start:]
+
+4.2 ユーザ初期化プログラム
+
+μT-Kernel実装仕様書 H8S/2212版を参照。
+
+5 カーネル実装仕様
+
+5.1 システム状態判定
+
+(1)タスク独立部（割り込みハンドラ・タイムイベントハンドラ）
+
+カーネル内にフラグを設けて判定。
+
+	knl_taskindp = 0	タスク部
+	knl_taskindp > 0	タスク独立部
+
+(2)凖タスク部（拡張SVCハンドラ）
+
+カーネル内にフラグを設けて判定。
+
+	TCBのsysmode = 0	タスク部
+	TCBのsysmode > 0	タスク独立部
+
+5.2 カーネルが使用する例外・割り込み
+
+	trapa 0	システムコール・拡張SVC
+	trapa 1	tk_ret_int()システムコール
+	trapa 2	タスクディスパッチャ
+	trapa 3	(未使用)
+
+	dintno 24	IMIA0
+
+5.3 システムコール／拡張SVCのインタフェース
+
+呼び出し方法等に関する基本的な説明は、μT-Kernel実装仕様書 H8S/2212版を参照。
+
+ただしEXRレジスタは存在しないため、このレジスタに対する操作は行わない。
+
+(1)システムコールのインタフェース
+
+システムコールは、第3引数まではレジスタに設定し、第4引数以降はスタックに積ん
+で、TRAPA #1(trapa #TRAP_SVC)により呼び出す。システムコールのインタフェースの実
+装例を、以下に示す。
+
+ER tk_xxx_yyy(p1, p2, p3, p4, p5)
+
+//				stack state	  
+//	High Address	    +-------------------+
+//			    | 5th arg (low)	|	
+//			    | 5th arg (high)	|	
+//			    | 4th arg (low)	|
+//			    | 4th arg (high)	|
+//			    | PC (low)		| saved by I/F call
+//			    | PC (high)		|
+//			    | R0		|	
+//			    | PC (low)		| saved by trapa
+//	er7, er5 =>	    | CCR:PC (high)	|
+//	Low Address	    +-------------------+
+//			     <-- 16bit width -->	
+//			     
+Csym(tk_xxx_yyy):
+	push.w	r0
+	mov.w	機能コード, r0
+#if USE_TRAP
+	trapa	#TRAP_SVC
+#else
+	jsr	Csym(knl_call_entry)
+#endif
+	inc.l	#2, er7
+	rts
+
+(2)拡張SVCのインタフェースライブラリ
+
+引数は全てパケット化し、パケットの先頭アドレスをer1レジスタに設定してTRAPA #1
+(trapa #TRAP_SVC)により呼び出す。パケットは通常、スタック上に作成するが、他の場
+所でも構わない。引数はパケット化するため、数や型に制限は無い。
+
+拡張SVCのインタフェース実装例を、以下に示す。
+
+W zxxx_yyy(p1, p2, p3, p4, p5, p6)
+
+Csym(${func}):
+	push.l	er1		// レジスタ上の引数をスタックに積む
+	push.l	er0
+	mov.l	er7, er1
+	push.l	er2
+	mov.w	@zxxx_yyy, r0	// er1 = 引数パケットのアドレス
+	trapa	#TRAP_SVC
+	add.l	#12, er7
+	rts
+
+(3)デバッガサポート機能システムコールのインタフェース
+
+デバッガサポート機能には対応しないため、インタフェースは存在しない。
+
+5.4 システムコール呼び出し時のスタック
+
+(1)C言語I/F (func(arg1, arg2, ...))
+
+	High Address	    +-------------------+
+			    | ...		|
+			    | 5th arg (low)	|	
+			    | 5th arg (high)	|	
+			    | 4th arg (low)	|
+			    | 4th arg (high)	|
+			    | PC (low)		| saved by I/F call
+			    | PC (high)		|
+	Low Address	    +-------------------+
+			     <-- 16bit width -->	
+
+	er0 = 1st arg
+	er1 = 2nd arg
+	er2 = 3rd arg
+
+(2)knl_call_entry先頭（trapa #TRAP_SVC直後）
+
+	High Address	    +-------------------+
+			    | ...		|
+			    | 5th arg (low)	|	
+			    | 5th arg (high)	|	
+			    | 4th arg (low)	|
+			    | 4th arg (high)	|
+			    | PC (low)		| saved by I/F call
+			    | PC (high)		|
+			    | R0		|	
+			    | PC (low)		| saved by trapa
+		SP =>	    | CCR:PC (high)	|
+	Low Address	    +-------------------+
+			     <-- 16bit width -->	
+
+	r0  = fncd
+	e0  = 1st argの上位16bit
+	スタックに退避されたr0 = 1st argの下位16bit
+	er1 = 2nd arg
+	er2 = 3rd arg
+
+(3)bpl l_esvc_functionの直後
+
+	High Address	    +-------------------+
+			    | ...		|
+			    | 5th arg (low)	|	
+			    | 5th arg (high)	|	
+			    | 4th arg (low)	|
+			    | 4th arg (high)	|
+			    | PC (low)		| saved by I/F call
+			    | PC (high)		|
+			    | R0		|	
+			    | PC (low)		| saved by trapa
+			    | CCR:PC (high)	|
+			    | R4		|
+			    | E4		|
+			    | R5		|
+			    | E5		|
+			    | R6		|
+		er5, SP =>  | E6		|
+	Low Address	    +-------------------+
+			     <-- 16bit width -->	
+
+	r0  = fncd
+	e0  = 1st argの上位16bit
+	スタックに退避されたr0 = 1st argの下位16bit
+	er1 = 2nd arg
+	er2 = 3rd arg
+	r4  = fncd
+
+(4)システムコール呼び出し直前
+
+	High Address	    +-------------------+
+			    | ...		|
+			    | 5th arg (low)	|	
+			    | 5th arg (high)	|	
+			    | 4th arg (low)	|
+			    | 4th arg (high)	|
+			    | PC (low)		| saved by I/F call
+			    | PC (high)		|
+			    | R0		|	
+			    | PC (low)		| saved by trapa
+			    | CCR:PC (high)	|
+			    | R4		|
+			    | E4		|
+			    | R5		|
+			    | E5		|
+			    | R6		|
+		er5 =>	    | E6		|
+			    | (5th arg (low))	|
+			    | (5th arg (high))	|
+			    | (4th arg (low))	|
+			    | (4th arg (high))	|
+	Low Address	    +-------------------+
+			     <-- 16bit width -->	
+
+	er0 = 1st arg
+	er1 = 2nd arg
+	er2 = 3rd arg
+
+5.5 拡張SVC呼び出し時のスタック
+
+(1)C言語I/F (func(arg1, arg2, ...))
+
+	High Address	    +-------------------+
+			    | ...		|
+			    | 5th arg (low)	|	
+			    | 5th arg (high)	|	
+			    | 4th arg (low)	|
+			    | 4th arg (high)	|
+			    | PC (low)		| saved by I/F call
+			    | PC (high)		|
+	Low Address	    +-------------------+
+			     <-- 16bit width -->	
+
+	er0 = 1st arg
+	er1 = 2nd arg
+	er3 = 3rd arg
+
+(2)knl_call_entry先頭（trapa #TRAP_SVC直後）
+
+	High Address	    +-------------------+
+			    | ...		|
+			    | 5th arg (low)	|	
+			    | 5th arg (high)	|	
+			    | 4th arg (low)	|
+			    | 4th arg (high)	|
+			    | PC (low)		| saved by I/F call
+			    | PC (high)		|
+			    | 2nd arg (low)	|
+			    | 2nd arg (high)	|
+			    | 1st arg (low)	|
+		er1 =>	    | 1st arg (high)	|
+			    | 3rd arg (low)	|
+			    | 3rd arg (high)	|
+			    | PC (low)		| saved by trapa
+		SP =>	    | CCR:PC (high)	|
+	Low Address	    +-------------------+
+			     <-- 16bit width -->	
+
+	r0  = fncd
+	er1 = pk_para
+
+(3)l_esvc_function先頭
+
+	High Address	    +-------------------+
+			    | ...		|
+			    | 5th arg (low)	|	
+			    | 5th arg (high)	|	
+			    | 4th arg (low)	|
+			    | 4th arg (high)	|
+			    | PC (low)		| saved by I/F call
+			    | PC (high)		|
+			    | 2nd arg (low)	|
+			    | 2nd arg (high)	|
+			    | 1st arg (low)	|
+		er1 =>	    | 1st arg (high)	|
+			    | 3rd arg (low)	|
+			    | 3rd arg (high)	|
+			    | PC (low)		| saved by trapa
+			    | CCR:PC (high)	|
+			    | R4		|
+			    | E4		|
+			    | R5		|
+			    | E5		|
+			    | R6		|
+		er5, SP =>  | E6		|
+	Low Address	    +-------------------+
+			     <-- 16bit width -->	
+
+	r0  = fncd
+	er1 = pk_para
+
+(4)knl_svc_ientry先頭
+
+	High Address	    +-------------------+
+			    | ...		|
+			    | 5th arg (low)	|	
+			    | 5th arg (high)	|	
+			    | 4th arg (low)	|
+			    | 4th arg (high)	|
+			    | 3rd arg (low)	|
+			    | 3rd arg (high)	|
+			    | 2nd arg (low)	|
+			    | 2nd arg (high)	|
+			    | 1st arg (low)	|
+		er0 =>	    | 1st arg (high)	|
+			    | 3rd arg (low)	|
+			    | 3rd arg (high)	|
+			    | PC (low)		| saved by trapa
+			    | CCR:PC (high)	|
+			    | R4		|
+			    | E4		|
+			    | R5		|
+			    | E5		|
+			    | R6		|
+		er5, SP =>  | E6		|
+	Low Address	    +-------------------+
+			     <-- 16bit width -->	
+
+	er0 = pk_para
+	r1  = fncd
+	er4 = ret_addr (saved by I/F call)
+
+5.6 割り込み発生時のスタック
+
+μT-Kernel実装仕様書 H8S/2212版を参照。
+
+5.7 タスクの実装依存定義
+
+μT-Kernel実装仕様書 H8S/2212版を参照。
+
+5.8 タスクレジスタの設定・参照
+
+μT-Kernel実装仕様書 H8S/2212版を参照。
+
+6 システムコンフィギュレーションデータ
+
+6.1 utk_config_depend.hの設定値
+
+μT-Kernel実装仕様書 H8S/2212版を参照。
+ただし、以下の項目に関してはリファレンスコードと異なっているため、
+ユーザは必要に応じて調整すること（デフォルトでは必要最低限のものしか
+有効にしていない）。
+
+	SYSTEMAREA_TOP, SYSTEMAREA_END, RI_USERAREA_TOP, RI_INTSTACK
+	CFN_TIMER_PERIOD
+	CFN_MAX_TSKID, CFN_MAX_SEMID, CFN_MAX_FLGID, CFN_MAX_MBXID,
+	CFN_MAX_MTXID, CFN_MAX_MBFID, CFN_MAX_PORID, CFN_MAX_MPLID,
+	CFN_MAX_MPFID, CFN_MAX_CYCID, CFN_MAX_ALMID, CFN_MAX_SSYID,
+	CFN_MAX_REGDEV, CFN_MAX_OPNDEV, CFN_MAX_REQDEV
+
+6.2 makerules
+
+μT-Kernel実装仕様書 H8S/2212版を参照。
+
+7. Makeのためのヒント
+
+ビルドの前に、以下の環境変数の設定を忘れないこと。
+
+	$ export BD=/home/user/utkernel_source
+	$ export GNU_BD=/usr/local
+	$ export TOOL_ORIGIN=GNUh8300
+	$ export GNUh8300=/usr/local/h8300-elf
+
+ビルド用のディレクトリは、$(BD)/kernel/sysmain/build/app_h83069もしくは
+$(BD)/kernel/sysmain/build/app_h83052。makeでビルド、make cleanで
+オブジェクトのクリーンアップ。BSD環境ではGNU makeを使うこと。
+
+ターゲットに転送するのは、kernel-ram.motもしくはkernel-rom.mot。
