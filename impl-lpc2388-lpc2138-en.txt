@@ -1,0 +1,547 @@
+UNOFFICIAL micro T-Kernel Implementation Specification (LPC2388, LPC2138)
+
+Version 1.01.01
+April, 2012
+
+
+1 CPU
+
+1.1 Hardware Specifications
+
+- LPC2388 edition
+
+	CPU:	NXP LPC2388 @72MHz (Internal 4MHz RC-oscillator x 18)
+	ROM:	512kB (On-chip FlashROM)
+	RAM:	64kB (On-chip SRAM)
+
+	Target board: CQ-FRK-NXP-ARM, the supplement of Interface Magazine
+	(CQ Publishing) May/2005
+	(http://www.kumikomi.net/interface/contents/200905.php)
+
+	* RAM kernel is not supported
+
+	* ROM kernel requires on-chip resources only.
+	  Other LPC2388-based boards are expected to work (but not tested).
+
+- LPC2138 edition
+
+	CPU:	NXP LPC2138 @58.9824MHz (14.7456MHz x 4)
+	ROM:	512kB (On-chip FlashROM)
+	RAM:	32kB (On-chip SRAM)
+
+	Target board: OLIMEX LPC-H2138 Header board
+	(http://www.olimex.com/dev/lpc-h2138.html)
+
+	* RAM kernel is not supported
+
+	* ROM kernel requires on-chip resources only.
+	  Other LPC2138-based boards with 10MHz~15MHz crystal are expected
+	  to work (but not tested).
+
+1.2 Protection Levels and Operating Modes
+
+Protection levels correspond to CPU operating modes as follows.
+
+	Protection Level	Operation Mode
+	3			(treated as protection level 0)
+	2			(treated as protection level 0)
+	1			(treated as protection level 0)
+	0			SVC: Supervisor mode
+
+Even if any of the protection levels as above is specified, it shall be
+treated as protection level 0.
+CPU Operation mode of user mode (USR) and system mode (SYS) is not used.
+
+1.3 Use of the Thumb Instruction Set
+
+When the Thumb instruction set is used, programming shall follow the
+"ARM/Thumb Interworking" directives. When C language (GNU C) is used, the
+"-mthumb-interwork-thumb" option is designated at compiling.
+
+When a task or handler written using the Thumb instruction set is designated,
+1 is set to the least siginificant bit (LSB) of the address. When the ARM
+instruction set is used, this bit is cleared to 0. Normally this is handled
+by the linker automatically and so programmers are not required t be aware
+of this.
+
+Thumb instruction set is not used in kernel.
+
+2 Memory
+
+2.1 LPC2388 edition
+
+2.1.1 Overall Memory Map
+
+	0x00000000	+-----------------------+
+			|On-chip ROM (512kB)	|	0x00000000-0x0007ffff
+	0x00080000	+-----------------------+
+			:(Reserved)		:
+	0x40000000	+-----------------------+
+			|On-chip RAM (64kB)	|	0x40000000-0x4000ffff
+	0x40010000	+-----------------------+
+			:(USB/Ethernet/External/:
+			: Reserved)          (*):
+	0xe0000000	+-----------------------+
+			|On-chip Peripherals	|
+	0xffffffff	+-----------------------+
+
+			(*) see LPC23XX User manual
+
+2.1.2 ROM Memory Map
+
+	0x00000000	+-----------------------+
+			|Reset			|
+	0x00000004	+-----------------------+
+			|Undefined Instruction	|
+	0x00000008	+-----------------------+
+			|Software Interrupt(SWI)|
+	0x0000000c	+-----------------------+
+			|Prefetch Abort		|
+	0x00000010	+-----------------------+
+			|Data Abort		|
+	0x00000014	+-----------------------+
+			|(Reserved)		|
+	0x00000018	+-----------------------+
+			|Interrupt(IRQ)		|
+	0x0000001c	+-----------------------+
+			|Fast Interrupt(FIQ)	|
+	0x00000000	+-----------------------+
+			|(Reserved)		|
+	0x00000040	+-----------------------+
+			|micro T-Kernel code	|	0x00000040-0x0007ffff
+			+- - - - - - - - - - - -+
+			|(unused)		|
+	0x00080000	+-----------------------+
+
+2.1.3 RAM Memory Map
+
+	0x40000000	+-----------------------+
+			|.data			|
+			+- - - - - - - - - - - -+
+			|.bss (NoInit)		|
+			+- - - - - - - - - - - -+
+			|.bss			|
+			+- - - - - - - - - - - -+	<-SYSTEMAREA_TOP
+			|micro T-Kernel		|
+			|        management area|
+	0x4000e800	+-----------------------+	<-SYSTEMAREA_END
+			|SVC stack		|
+			+-----------------------+ R13_svc
+			|IRQ stack		|	(IRQ_STACK_SIZE)
+			+-----------------------+ R13_irq
+			|FIQ stack		|	(FIQ_STACK_SIZE)
+			+-----------------------+ R13_fiq
+			|UND stack		|	(UND_STACK_SIZE)
+			+-----------------------+ R13_und
+			|ABT stack		|	(ABT_STACK_SIZE)
+	0x40010000	+-----------------------+ R13_abt
+
+.data and .bss are located in ascending order from the lower byte of the on-
+chip RAM.
+
+The micro T-Kernel management area is memory space dynamically managed by the
+micro T-Kernel memory management function.
+
+Normally, all unused memory spaces are allocated to the micro T-Kernel
+management area, but this can be changed in system configuration.
+micro T-Kernel management area is allocated to the designated area between
+"SYSTEMAREA_TOP" and "SYSTEMAREA_END" in configuration file,
+utk_config_depend.h.
+
+The stack area shall be allocated in descending order from the most significant
+byte of on-chip RAM.
+
+The location address of stack area, and the stack size of each mode other than
+supervisor (SVC) mode can also be specified in utk_config_depend.h. The stack
+area of supervisor is allocated at the lower bytes in the interrupt (IRQ) stack
+area.
+
+2.2 LPC2138 edition
+
+2.2.1 Overall Memory Map
+
+	0x00000000	+-----------------------+
+			|On-chip ROM (512kB)	|	0x00000000-0x0007ffff
+	0x00080000	+-----------------------+
+			:(Reserved)		:
+	0x40000000	+-----------------------+
+			|On-chip RAM (32kB)	|	0x40000000-0x40007fff
+	0x40008000	+-----------------------+
+			:(Reserved)          (*):
+	0xe0000000	+-----------------------+
+			|On-chip Peripherals	|
+	0xffffffff	+-----------------------+
+
+			(*) see LPC213X User manual
+
+2.2.2 ROM Memory Map
+
+	0x00000000	+-----------------------+
+			|Reset			|
+	0x00000004	+-----------------------+
+			|Undefined Instruction	|
+	0x00000008	+-----------------------+
+			|Software Interrupt(SWI)|
+	0x0000000c	+-----------------------+
+			|Prefetch Abort		|
+	0x00000010	+-----------------------+
+			|Data Abort		|
+	0x00000014	+-----------------------+
+			|(Reserved)		|
+	0x00000018	+-----------------------+
+			|Interrupt(IRQ)		|
+	0x0000001c	+-----------------------+
+			|Fast Interrupt(FIQ)	|
+	0x00000000	+-----------------------+
+			|(Reserved)		|
+	0x00000040	+-----------------------+
+			|micro T-Kernel code	|	0x00000040-0x0007ffff
+			+- - - - - - - - - - - -+
+			|(unused)		|
+	0x00080000	+-----------------------+
+
+2.2.3 RAM Memory Map
+
+	0x40000000	+-----------------------+
+			|.data			|
+			+- - - - - - - - - - - -+
+			|.bss (NoInit)		|
+			+- - - - - - - - - - - -+
+			|.bss			|
+			+- - - - - - - - - - - -+	<-SYSTEMAREA_TOP
+			|micro T-Kernel		|
+			|        management area|
+	0x40006800	+-----------------------+	<-SYSTEMAREA_END
+			|SVC stack		|
+			+-----------------------+ R13_svc
+			|IRQ stack		|	(IRQ_STACK_SIZE)
+			+-----------------------+ R13_irq
+			|FIQ stack		|	(FIQ_STACK_SIZE)
+			+-----------------------+ R13_fiq
+			|UND stack		|	(UND_STACK_SIZE)
+			+-----------------------+ R13_und
+			|ABT stack		|	(ABT_STACK_SIZE)
+	0x40008000	+-----------------------+ R13_abt
+
+.data and .bss are located in ascending order from the lower byte of the on-
+chip RAM.
+
+The micro T-Kernel management area is memory space dynamically managed by the
+micro T-Kernel memory management function.
+
+Normally, all unused memory spaces are allocated to the micro T-Kernel
+management area, but this can be changed in system configuration.
+micro T-Kernel management area is allocated to the designated area between
+"SYSTEMAREA_TOP" and "SYSTEMAREA_END" in configuration file,
+utk_config_depend.h.
+
+The stack area shall be allocated in descending order from the most significant
+byte of on-chip RAM.
+
+The location address of stack area, and the stack size of each mode other than
+supervisor (SVC) mode can also be specified in utk_config_depend.h. The stack
+area of supervisor is allocated at the lower bytes in the interrupt (IRQ) stack
+area.
+
+2.4 Stacks
+
+micro T-Kernel has the following two kinds of stacks.
+
+(1) System stack
+(2) Exception/Interrupt stacks
+
+For details, see "micro T-Kernel Implementation Specification for
+AT91(ARM7TDMI) (version 1.01.00)".
+
+3 Interrupts and Exceptions
+
+3.1 Interrupt Definition Numbers
+
+Regarding the interrupt definition number (dintno) defined with tk_def_int(),
+while the numbers 0 to 31 support the interrupt source controlled by the
+vectored interrupt controller (VIC), the numbers 32 to 111 support the software
+interrupts (SWI). Therefore, the numbers SWI 0 to SWI 31 can not be used.
+
+Following is the list of the interrupt sources controlled by VIC.
+
+	Vector No	LPC2138		LPC2388
+	0		WDT		WDT
+	1		-		-
+	2		ARMCore0	ARMCore0
+	3		ARMCore1	ARMCore1
+	4		TIMER0		TIMER0
+	5		TIMER1		TIMER1
+	6		UART0		UART0
+	7		UART1		UART1
+	8		PWM0		PWM1
+	9		I2C0		I2C0
+	10		SPI0		SPI/SSP0
+	11		SPI1/SSP	SSP1
+	12		PLL		PLL
+	13		RTC		RTC
+	14		EINT0		EINT0
+	15		EINT1		EINT1
+	16		EINT2		EINT2
+	17		EINT3		EINT3
+	18		AD0		AD0
+	19		I2C1		I2C1
+	20		BOD		BOD
+	21		AD1		Ethernet
+	22		-		USB
+	23		-		CAN1&2
+	24		-		SD/MMC
+	25		-		GPDMA
+	26		-		TIMER2
+	27		-		TIMER3
+	28		-		UART2
+	29		-		UART3
+	30		-		I2C2
+	31		-		I2S
+
+3.2 Software Interrupt Assignments
+
+See "micro T-Kernel Implementation Specification for AT91(ARM7TDMI)".
+
+3.3 Interrupt handler
+
+See "micro T-Kernel Implementation Specification for AT91(ARM7TDMI)".
+
+3.4 Exception/Interrupt Handling Routines
+
+See "micro T-Kernel Implementation Specification for AT91(ARM7TDMI)".
+The difference, IRQ/FIQ handler is shown below.
+
+(LPC2388 edition)
+/*
+ * Exception branch routine
+ */
+irq_vector:
+        b       knl_irq_handler    /* IRQ */
+        .global fiq_vector
+fiq_vector:
+        b       fiq_vector         /* FIQ: no support */
+
+/*
+ * interrupts (IRQ)
+ */
+	.global knl_irq_handler
+knl_irq_handler:
+	sub    lr, lr, #4
+	stmfd  sp!, {lr}  /* sp-> lr_xxx */
+
+	stmfd  sp!, {ip} /* sp-> ip, lr_xxx */
+	mrs    ip, spsr
+	stmfd  sp!, {ip} /* sp-> spsr_xxx, ip, lr_xxx */
+	stmfd  sp!, {r3} /* sp-> r3, spsr_xxx, ip, lr_xxx */
+
+	ldr    lr, =VICAddress
+	ldr    lr, [lr] /* lr := IRQ No. */
+	ldr    ip, =Csym(knl_intvec) /* exception vector table */
+	add    ip, ip, lr, LSL #2 /* ip := &vector[IRQ No.] */
+	ldr    r3, [ip] /* r3 := vector[IRQ No.] */
+	mov    lr, pc
+	bx     r3
+
+(LPC2138 edition)
+/*
+ * Exception branch routine
+ */
+irq_vector:
+        b       knl_irq_handler    /* IRQ */
+        .global fiq_vector
+fiq_vector:
+        b       fiq_vector         /* FIQ: no support */
+
+/*
+ * interrupts (IRQ)
+ */
+	.global knl_irq_handler
+knl_irq_handler:
+	sub    lr, lr, #4
+	stmfd  sp!, {lr}  /* sp-> lr_xxx */
+
+	stmfd  sp!, {ip} /* sp-> ip, lr_xxx */
+	mrs    ip, spsr
+	stmfd  sp!, {ip} /* sp-> spsr_xxx, ip, lr_xxx */
+	stmfd  sp!, {r3} /* sp-> r3, spsr_xxx, ip, lr_xxx */
+
+	ldr    ip, =VICIRQStatus
+	ldr    ip, [ip]
+	mov    lr, #0 /* lr: IRQ No. */
+
+bsf_step16:
+	ldr    r3,=0xffff
+	tst    ip, r3
+	addeq  lr, lr, #16
+	moveq  ip, ip, lsr #16
+bsf_step8:
+	tst    ip, #0xff
+	addeq  lr, lr, #8
+	moveq  ip, ip, lsr #8
+bsf_step4:
+	tst    ip, #0x0f
+	addeq  lr, lr, #4
+	moveq  ip, ip, lsr #4
+bsf_step2:
+	tst    ip, #0x03
+	addeq  lr, lr, #2
+	moveq  ip, ip, lsr #2
+bsf_step1:
+	tst    ip, #0x01
+	addeq  lr, lr, #1
+
+	ldr    ip, =Csym(knl_intvec) /* exception vector table */
+	add    ip, ip, lr, LSL #2 /* ip := &vector[IRQ No.] */
+	ldr    r3, [ip] /* r3 := vector[IRQ No.] */
+	mov    lr, pc
+	bx     r3
+
+4. Initialization and Startup Processing
+
+4.1 micro T-Kernel Startup Procedure
+
+When system is reset, micro T-Kernel starts up.
+The procedures from the startup of micro T-Kernel to the call of main function
+are as follows.
+
+icrt0.S
+	(1) Switch to supervisor mode [start:]
+	(2) Remap vector area (boot loader -> user flash) [memmap_init:]
+	(3) Setup PLL [pll_init:]
+	(4) Set the stack pointer (from the end of on-chip RAM) [init_stacks:]
+		R13_abt: Abort mode
+		R13_und: Undefined instruction exception mode
+		R13_fiq: fast interrupt (FIQ) mode
+		R13_irq: Interrupt (irq) mode
+		R13_svc: supervisor mode
+	(5) Set the initial value of .data (ROM->RAM) [data_loop:]
+	(6) Clear .bss to 0 [bss_loop:]
+	(7) Recalculate the micro T-Kernel management area [bss_done:]
+	(8) Call "main" function (sysinit_main.c) [kernel_start:]
+
+
+Serial port (UART0) is initialized at knl_init_device() (devinit.c),
+and is configured as 38400bps, 8bit, non-parity, 1 stop-bit.
+
+4.2 User initialization program
+
+See "micro T-Kernel Implementation Specification for AT91(ARM7TDMI)".
+
+5 micro T-Kernel Implementation Definitions
+
+5.1 System State Detection
+
+See "micro T-Kernel Implementation Specification for AT91(ARM7TDMI)".
+
+5.2 Exceptions/Interrupts Used by micro T-Kernel
+
+	SWI 36		micro T-Kernel system calls/extended SVC
+	SWI 37		"tk_ret_int()" system call
+	SWI 38		Task dispatcher call
+	SWI 39		Debugger support functions
+
+	dintno 4	Programmable timer #0(TIMER0)
+
+5.3 System Call/Extended SVC Interface
+
+See "micro T-Kernel Implementation Specification for AT91(ARM7TDMI)".
+
+5.4 Interrupt Handlers
+
+See "micro T-Kernel Implementation Specification for AT91(ARM7TDMI)".
+
+5.5 Time Event Handlers
+
+See "micro T-Kernel Implementation Specification for AT91(ARM7TDMI)".
+
+5.6 Task implementation-dependent definitions
+
+See "micro T-Kernel Implementation Specification for AT91(ARM7TDMI)".
+
+5.7 Task registers
+
+See "micro T-Kernel Implementation Specification for AT91(ARM7TDMI)".
+
+5.8 System Call/Extended SVC Hook Routine
+
+See "micro T-Kernel Implementation Specification for AT91(ARM7TDMI)".
+
+5.9 Interrupt Controllers
+
+Since the interrupt controller control is highly hardware-dependent, it is not
+specified in micro T-Kernel. However, it is implemented as follows.
+
+(1) Interrupt Definition Numbers
+
+Numbers 0 to 31 among interrupt definition numbers use same number as the
+interrupt source of the vectored interrupt controller (VIC).
+
+(2) Interrupt mode setting
+
+No SetIntMode() support.
+All interrupts are treat as IRQ (no FIQ support) and there is no edge/level
+trigger selection.
+
+(3) Enable interrupt
+
+void EnableInt( INTVEC intvec, INT intpri )	// LPC2388
+void EnableInt( INTVEC intvec )			// LPC2138
+
+Enable the interrupt designated in intvec and intpri.
+intpri is interrupt priority, 0 (Highest) ... 15 (Lowest).
+
+(4) Disable interrupt
+
+void DisableInt( INTVEC intvec )
+
+Disable the interrupt designated in intvec.
+
+(5) Clear the interrupt request
+
+There is no edge trigger support, no ClearInt() support.
+
+(6) Check whether interrupt is requested or not
+
+BOOL CheckInt( INTVEC intvec )
+
+Check whether there is an interrupt request for the interrupt designated in
+intvec or not, and return TRUE (non-zero value) if there is an interrupt
+request.
+
+(7) Notify the end of interrupt processing
+
+void EndOfInt( INTVEC intvec )			// LPC2388 only
+
+This function writes Vector Address Register of VIC to notify the end of
+interrupt service and accept new interrupt.
+Interrupt handler must call this function or write Vector Address Register
+before exiting.
+
+(8) Mask interrupt by priority
+
+INT SetIntLevel( INT intpri )			// LPC2388 only
+
+Mask all interrupts which have equal or lower priority.
+intpri is priority mask, 0 ... 16. 0/16 masks/unmasks all interrupts,
+7 masks priority 7 ... 15.
+Return value is old priority mask (intpri value).
+
+6. System Configuration Data
+
+6.1 Setting value of utk_config_depend.h
+
+See "micro T-Kernel Implementation Specification for AT91(ARM7TDMI)".
+
+These values are modified to fit each CPU.
+
+	- SYSTEMAREA_TOP, SYSTEMAREA_END, RI_USERAREA_TOP
+	- CFN_REALMEMEND, EXCEPTION_STACK_TOP
+
+6.2 Setting value of sysinfo_depend.h
+
+See "micro T-Kernel Implementation Specification for AT91(ARM7TDMI)".
+
+6.3 makerules
+
+See "micro T-Kernel Implementation Specification for AT91(ARM7TDMI)".
+
