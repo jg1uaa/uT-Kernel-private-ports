@@ -1,7 +1,7 @@
 UNOFFICIAL micro T-Kernel Implementation Specification (LPC2388, LPC2138)
 
 Version 1.01.01
-April, 2012
+September, 2012
 
 
 1 CPU

@@ -25,6 +25,14 @@
 #  include <sys/sysdepend/app_at91/sysinfo_depend.h>
 #endif
 
+#ifdef APP_LPC2138
+#  include <sys/sysdepend/app_lpc2138/sysinfo_depend.h>
+#endif
+
+#ifdef APP_LPC2388
+#  include <sys/sysdepend/app_lpc2388/sysinfo_depend.h>
+#endif
+
 #ifdef APP_H83052
 #  include <sys/sysdepend/app_h83052/sysinfo_depend.h>
 #endif

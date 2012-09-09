@@ -22,6 +22,14 @@
 #ifndef __TK_SYSDEF_COMMON_H__
 #define __TK_SYSDEF_COMMON_H__
 
+#if APP_LPC2138
+#  include <tk/sysdepend/app_lpc2138/sysdef_depend.h>
+#endif
+
+#if APP_LPC2388
+#  include <tk/sysdepend/app_lpc2388/sysdef_depend.h>
+#endif
+
 #if APP_AT91
 #  include <tk/sysdepend/app_at91/sysdef_depend.h>
 #endif

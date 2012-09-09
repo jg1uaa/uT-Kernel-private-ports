@@ -21,6 +21,16 @@
 #ifndef __TK_SYSCALL_COMMON_H__
 #define __TK_SYSCALL_COMMON_H__
 
+#if APP_LPC2138
+#  include <tk/sysdepend/app_lpc2138/cpuattr.h>
+#  include <tk/sysdepend/app_lpc2138/cpudef.h>
+#endif
+
+#if APP_LPC2388
+#  include <tk/sysdepend/app_lpc2388/cpuattr.h>
+#  include <tk/sysdepend/app_lpc2388/cpudef.h>
+#endif
+
 #if APP_AT91
 #  include <tk/sysdepend/app_at91/cpuattr.h>
 #  include <tk/sysdepend/app_at91/cpudef.h>
